@@ -1,14 +1,16 @@
 use binaryninja::binaryview::BinaryView;
 use binaryninja::command::{register, Command};
+use binaryninja::custombinaryview::register_view_type;
 use log::{debug, LevelFilter};
 
-mod loader;
+mod command;
+mod view;
 
 struct PrintMemoryInformationCommand;
 
 impl Command for PrintMemoryInformationCommand {
     fn action(&self, binary_view: &BinaryView) {
-        loader::print_memory_information(binary_view);
+        command::print_memory_information(binary_view);
     }
 
     fn valid(&self, _binary_view: &BinaryView) -> bool {
@@ -20,6 +22,9 @@ impl Command for PrintMemoryInformationCommand {
 #[allow(non_snake_case)]
 pub extern "C" fn CorePluginInit() -> bool {
     binaryninja::logger::init(LevelFilter::Trace).expect("failed to initialize logging");
+
+    debug!("Registering minidump binary view type");
+    register_view_type("Minidump", "Minidump", view::MinidumpBinaryViewType::new);
 
     debug!("Registering minidump plugin commands");
     register(

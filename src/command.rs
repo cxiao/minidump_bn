@@ -1,30 +1,11 @@
-use binaryninja::binaryview::{BinaryView, BinaryViewBase, BinaryViewExt};
-use binaryninja::databuffer::DataBuffer;
-use log::debug;
-use minidump::{Minidump, MinidumpMemoryInfoList};
-use std::ops::Deref;
 use std::str;
-use std::sync::Arc;
 
-#[derive(Clone)]
-struct DataBufferWrapper {
-    inner: Arc<DataBuffer>,
-}
+use log::{debug, info};
+use minidump::{Minidump, MinidumpMemoryInfoList};
 
-impl DataBufferWrapper {
-    fn new(buf: DataBuffer) -> Self {
-        DataBufferWrapper {
-            inner: Arc::new(buf),
-        }
-    }
-}
+use binaryninja::binaryview::{BinaryView, BinaryViewBase, BinaryViewExt};
 
-impl Deref for DataBufferWrapper {
-    type Target = [u8];
-    fn deref(&self) -> &Self::Target {
-        self.inner.get_data()
-    }
-}
+use crate::view::DataBufferWrapper;
 
 pub fn print_memory_information(bv: &BinaryView) {
     debug!("Printing memory information");
@@ -37,7 +18,7 @@ pub fn print_memory_information(bv: &BinaryView) {
                     memory_info_list
                         .print(&mut memory_info_list_writer)
                         .unwrap();
-                    debug!("{}", str::from_utf8(&memory_info_list_writer).unwrap());
+                    info!("{}", str::from_utf8(&memory_info_list_writer).unwrap());
                 }
             }
         }

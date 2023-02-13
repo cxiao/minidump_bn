@@ -3,7 +3,7 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 
 use binaryninja::segment::Segment;
-use log::{debug, error};
+use log::{debug, error, info};
 use minidump::format::MemoryProtection;
 use minidump::{
     Minidump, MinidumpMemory64List, MinidumpMemoryInfoList, MinidumpMemoryList, MinidumpStream,
@@ -76,10 +76,6 @@ impl CustomBinaryViewType for MinidumpBinaryViewType {
         builder: binaryninja::custombinaryview::CustomViewBuilder<'builder, Self>,
     ) -> binaryninja::binaryview::Result<CustomView<'builder>> {
         debug!("Creating MinidumpBinaryView from registered MinidumpBinaryViewType");
-        debug!(
-            "Creating MinidumpBinaryView with passed data length {}",
-            data.len()
-        );
 
         let binary_view = builder.create::<MinidumpBinaryView>(data, ());
         binary_view
@@ -231,6 +227,16 @@ impl MinidumpBinaryView {
                 {
                     let (readable, writable, executable) =
                         MinidumpBinaryView::translate_memory_protection(*segment_protection);
+
+                    info!(
+                        "Adding memory segment at virtual address {:#x} to {:#x}, from data range {:#x} to {:#x}, with protections readable {}, writable {}, executable {}",
+                         segment.mapped_addr_range.start,
+                         segment.mapped_addr_range.end,
+                         segment.rva_range.start,
+                         segment.rva_range.end,
+                         readable, writable, executable
+                    );
+
                     self.add_segment(
                         Segment::builder(segment.mapped_addr_range.clone())
                             .parent_backing(segment.rva_range.clone())

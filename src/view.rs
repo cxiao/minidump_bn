@@ -1,8 +1,11 @@
-use std::ops::Deref;
+use std::ops::{Deref, Range};
 use std::sync::Arc;
 
+use binaryninja::segment::Segment;
 use log::{debug, error};
-use minidump::{Minidump, MinidumpSystemInfo};
+use minidump::{
+    Minidump, MinidumpMemory64List, MinidumpMemoryList, MinidumpStream, MinidumpSystemInfo,
+};
 
 use binaryninja::binaryview::{BinaryView, BinaryViewBase, BinaryViewExt};
 use binaryninja::custombinaryview::{
@@ -80,6 +83,27 @@ impl CustomBinaryViewType for MinidumpBinaryViewType {
     }
 }
 
+#[derive(Debug)]
+struct SegmentData {
+    rva_range: Range<u64>,
+    mapped_addr_range: Range<u64>,
+}
+
+impl SegmentData {
+    fn from_addresses_and_size(rva: u64, mapped_addr: u64, size: u64) -> Self {
+        SegmentData {
+            rva_range: Range {
+                start: rva,
+                end: rva + size,
+            },
+            mapped_addr_range: Range {
+                start: mapped_addr,
+                end: mapped_addr + size,
+            },
+        }
+    }
+}
+
 pub struct MinidumpBinaryView {
     inner: binaryninja::rc::Ref<BinaryView>,
 }
@@ -97,7 +121,7 @@ impl MinidumpBinaryView {
         let read_buffer = DataBufferWrapper::new(read_buffer);
 
         if let Ok(minidump_obj) = Minidump::read(read_buffer) {
-            // MinidumpSystemInfo
+            // Architecture, platform information
             if let Ok(minidump_system_info) = minidump_obj.get_stream::<MinidumpSystemInfo>() {
                 if let Some(platform) = MinidumpBinaryView::translate_minidump_platform(
                     minidump_system_info.cpu,
@@ -105,10 +129,77 @@ impl MinidumpBinaryView {
                     minidump_system_info.os,
                 ) {
                     self.set_default_platform(&platform);
+                } else {
+                    error!(
+                        "Could not parse valid system information from minidump: could not map system information in MinidumpSystemInfo stream (arch {:?}, endian {:?}, os {:?}) to a known architecture",
+                        minidump_system_info.cpu,
+                        minidump_obj.endian,
+                        minidump_system_info.os,
+                    );
+                    return Err(());
                 }
             } else {
                 error!("Could not parse system information from minidump: could not find a valid MinidumpSystemInfo stream");
                 return Err(());
+            }
+
+            // Memory segments
+            let mut segment_data = Vec::<SegmentData>::new();
+
+            // 32-bit segments
+            if let Ok(minidump_memory_list) = minidump_obj.get_stream::<MinidumpMemoryList>() {
+                for memory_segment in minidump_memory_list.by_addr() {
+                    debug!(
+                        "Found 32-bit memory segment at RVA {:#x} with virtual address {:#x} and size {:#x}",
+                        memory_segment.desc.memory.rva,
+                        memory_segment.base_address,
+                        memory_segment.size
+                    );
+                    segment_data.push(SegmentData::from_addresses_and_size(
+                        memory_segment.desc.memory.rva as u64,
+                        memory_segment.base_address,
+                        memory_segment.size,
+                    ));
+                }
+            } else {
+                error!("Could not read 32-bit memory list from minidump: could not find a valid MinidumpMemoryList stream");
+            }
+
+            // 64-bit segments
+            // Grab the shared base RVA for all entries in the MinidumpMemory64List,
+            // since the minidump crate doesn't expose this to us
+            if let Ok(raw_stream) = minidump_obj.get_raw_stream(MinidumpMemory64List::STREAM_TYPE) {
+                let base_rva = u64::from_le_bytes(raw_stream[8..16].try_into().unwrap());
+                debug!("Found BaseRVA value {:#x}", base_rva);
+
+                if let Ok(minidump_memory_list) = minidump_obj.get_stream::<MinidumpMemory64List>()
+                {
+                    let mut current_rva = base_rva;
+                    for memory_segment in minidump_memory_list.iter() {
+                        debug!(
+                            "Found 64-bit memory segment at RVA {:#x} with virtual address {:#x} and size {:#x}",
+                            current_rva,
+                            memory_segment.base_address,
+                            memory_segment.size
+                        );
+                        segment_data.push(SegmentData::from_addresses_and_size(
+                            current_rva.clone(),
+                            memory_segment.base_address,
+                            memory_segment.size,
+                        ));
+                        current_rva = current_rva + memory_segment.size;
+                    }
+                } else {
+                    error!("Could not read 64-bit memory list from minidump: could not find a valid MinidumpMemoryList stream");
+                }
+            }
+
+            for segment in segment_data.iter() {
+                self.add_segment(
+                    Segment::builder(segment.mapped_addr_range.clone())
+                        .parent_backing(segment.rva_range.clone())
+                        .is_auto(true),
+                );
             }
         } else {
             error!("Could not parse data as minidump");

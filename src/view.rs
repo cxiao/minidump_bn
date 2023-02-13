@@ -1,10 +1,13 @@
+use std::collections::HashMap;
 use std::ops::{Deref, Range};
 use std::sync::Arc;
 
 use binaryninja::segment::Segment;
 use log::{debug, error};
+use minidump::format::MemoryProtection;
 use minidump::{
-    Minidump, MinidumpMemory64List, MinidumpMemoryList, MinidumpStream, MinidumpSystemInfo,
+    Minidump, MinidumpMemory64List, MinidumpMemoryInfoList, MinidumpMemoryList, MinidumpStream,
+    MinidumpSystemInfo,
 };
 
 use binaryninja::binaryview::{BinaryView, BinaryViewBase, BinaryViewExt};
@@ -194,12 +197,54 @@ impl MinidumpBinaryView {
                 }
             }
 
+            // Memory protection information
+            let mut segment_protection_data = HashMap::new();
+
+            if let Ok(minidump_memory_info_list) =
+                minidump_obj.get_stream::<MinidumpMemoryInfoList>()
+            {
+                for memory_info in minidump_memory_info_list.iter() {
+                    if let Some(memory_range) = memory_info.memory_range() {
+                        debug!(
+                            "Found memory protection info for memory segment ranging from virtual address {:#x} to {:#x}: {:#?}",
+                            memory_range.start,
+                            memory_range.end,
+                            memory_info.protection
+                        );
+                        segment_protection_data.insert(
+                            // The range returned to us by MinidumpMemoryInfoList is an
+                            // end-inclusive range_map::Range; we need to add 1 to
+                            // the end index to make it into an end-exclusive std::ops::Range.
+                            Range {
+                                start: memory_range.start,
+                                end: memory_range.end + 1,
+                            },
+                            memory_info.protection,
+                        );
+                    }
+                }
+            }
+
             for segment in segment_data.iter() {
-                self.add_segment(
-                    Segment::builder(segment.mapped_addr_range.clone())
-                        .parent_backing(segment.rva_range.clone())
-                        .is_auto(true),
-                );
+                if let Some(segment_protection) =
+                    segment_protection_data.get(&segment.mapped_addr_range)
+                {
+                    let (readable, writable, executable) =
+                        MinidumpBinaryView::translate_memory_protection(*segment_protection);
+                    self.add_segment(
+                        Segment::builder(segment.mapped_addr_range.clone())
+                            .parent_backing(segment.rva_range.clone())
+                            .is_auto(true)
+                            .readable(readable)
+                            .writable(writable)
+                            .executable(executable),
+                    );
+                } else {
+                    error!(
+                        "Could not find memory protection information for memory segment from {:#x} to {:#x}", segment.mapped_addr_range.start,
+                        segment.mapped_addr_range.end,
+                    );
+                }
             }
         } else {
             error!("Could not parse data as minidump");
@@ -249,6 +294,26 @@ impl MinidumpBinaryView {
             minidump::system_info::Os::Ps3 => None,
             minidump::system_info::Os::Solaris => None,
             _ => None,
+        }
+    }
+
+    fn translate_memory_protection(
+        minidump_memory_protection: MemoryProtection,
+    ) -> (bool, bool, bool) {
+        match minidump_memory_protection {
+            MemoryProtection::PAGE_NOACCESS => (false, false, false),
+            MemoryProtection::PAGE_READONLY => (true, false, false),
+            MemoryProtection::PAGE_READWRITE => (true, true, false),
+            MemoryProtection::PAGE_WRITECOPY => (true, true, false),
+            MemoryProtection::PAGE_EXECUTE => (false, false, true),
+            MemoryProtection::PAGE_EXECUTE_READ => (true, false, true),
+            MemoryProtection::PAGE_EXECUTE_READWRITE => (true, true, true),
+            MemoryProtection::PAGE_EXECUTE_WRITECOPY => (true, true, true),
+            MemoryProtection::ACCESS_MASK => (false, false, false),
+            MemoryProtection::PAGE_GUARD => (false, false, false),
+            MemoryProtection::PAGE_NOCACHE => (false, false, false),
+            MemoryProtection::PAGE_WRITECOMBINE => (false, false, false),
+            _ => (false, false, false),
         }
     }
 }

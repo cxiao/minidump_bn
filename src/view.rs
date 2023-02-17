@@ -21,6 +21,11 @@ use binaryninja::Endianness;
 
 type BinaryViewResult<R> = binaryninja::binaryview::Result<R>;
 
+/// A wrapper around a `binaryninja::databuffer::DataBuffer`, from which a `[u8]` buffer can be obtained
+/// to pass to `minidump::Minidump::read`.
+///
+/// This code is taken from [`dwarfdump`](https://github.com/Vector35/binaryninja-api/blob/9d8bc846bd213407fb1a7a19af2a96f17501ac3b/rust/examples/dwarfdump/src/lib.rs#L81)
+/// in the Rust API examples.
 #[derive(Clone)]
 pub struct DataBufferWrapper {
     inner: Arc<DataBuffer>,
@@ -41,6 +46,13 @@ impl Deref for DataBufferWrapper {
     }
 }
 
+/// The _Minidump_ binary view type, which the Rust plugin registers with the Binary Ninja core
+/// (via `binaryninja::custombinaryview::register_view_type`) as a possible binary view
+/// that can be applied to opened binaries.
+///
+/// If this view type is valid for an opened binary (determined by `is_valid_for`),
+/// the Binary Ninja core then uses this view type to create an actual instance of the _Minidump_
+/// binary view (via `create_custom_view`).
 pub struct MinidumpBinaryViewType {
     view_type: BinaryViewType,
 }
@@ -106,7 +118,10 @@ impl SegmentData {
     }
 }
 
+/// An instance of the actual _Minidump_ custom binary view.
+/// This contains the main logic to load the memory segments inside a minidump file into the binary view.
 pub struct MinidumpBinaryView {
+    /// The handle to the "real" BinaryView object, in the Binary Ninja core.
     inner: binaryninja::rc::Ref<BinaryView>,
 }
 

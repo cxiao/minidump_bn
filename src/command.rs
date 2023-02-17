@@ -1,6 +1,6 @@
 use std::str;
 
-use log::{debug, info};
+use log::{debug, error, info};
 use minidump::{Minidump, MinidumpMemoryInfoList};
 
 use binaryninja::binaryview::{BinaryView, BinaryViewBase, BinaryViewExt};
@@ -15,12 +15,30 @@ pub fn print_memory_information(bv: &BinaryView) {
             if let Ok(minidump_obj) = Minidump::read(read_buffer) {
                 if let Ok(memory_info_list) = minidump_obj.get_stream::<MinidumpMemoryInfoList>() {
                     let mut memory_info_list_writer = Vec::new();
-                    memory_info_list
-                        .print(&mut memory_info_list_writer)
-                        .unwrap();
-                    info!("{}", str::from_utf8(&memory_info_list_writer).unwrap());
+                    match memory_info_list.print(&mut memory_info_list_writer) {
+                        Ok(_) => {
+                            if let Ok(memory_info_str) = str::from_utf8(&memory_info_list_writer) {
+                                info!("{memory_info_str}");
+                            } else {
+                                error!("Could not convert the memory information description from minidump into a valid string");
+                            }
+                        }
+                        Err(_) => {
+                            error!("Could not get memory information from minidump");
+                        }
+                    }
+                } else {
+                    error!(
+                        "Could not parse a valid MinidumpMemoryInfoList stream from the minidump"
+                    );
                 }
+            } else {
+                error!("Could not parse a valid minidump file from the parent binary view's data buffer");
             }
+        } else {
+            error!("Could not read data from parent binary view");
         }
+    } else {
+        error!("Could not get the parent binary view");
     }
 }

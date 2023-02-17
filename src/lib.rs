@@ -28,8 +28,8 @@ pub extern "C" fn CorePluginInit() -> bool {
 
     debug!("Registering minidump plugin commands");
     register(
-        "Minidump\\[DEBUG] Print memory information",
-        "",
+        "Minidump\\[DEBUG] Print Minidump Memory Information",
+        "Print a human-readable description of the contents of the MinidumpMemoryInfoList stream in the loaded minidump",
         PrintMemoryInformationCommand {},
     );
 

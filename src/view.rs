@@ -118,6 +118,13 @@ impl SegmentData {
     }
 }
 
+#[derive(Debug)]
+struct SegmentMemoryProtection {
+    readable: bool,
+    writable: bool,
+    executable: bool,
+}
+
 /// An instance of the actual _Minidump_ custom binary view.
 /// This contains the main logic to load the memory segments inside a minidump file into the binary view.
 pub struct MinidumpBinaryView {
@@ -248,7 +255,7 @@ impl MinidumpBinaryView {
                 if let Some(segment_protection) =
                     segment_protection_data.get(&segment.mapped_addr_range)
                 {
-                    let (readable, writable, executable) =
+                    let segment_memory_protection =
                         MinidumpBinaryView::translate_memory_protection(*segment_protection);
 
                     info!(
@@ -257,16 +264,18 @@ impl MinidumpBinaryView {
                          segment.mapped_addr_range.end,
                          segment.rva_range.start,
                          segment.rva_range.end,
-                         readable, writable, executable
+                         segment_memory_protection.readable,
+                         segment_memory_protection.writable,
+                         segment_memory_protection.executable,
                     );
 
                     self.add_segment(
                         Segment::builder(segment.mapped_addr_range.clone())
                             .parent_backing(segment.rva_range.clone())
                             .is_auto(true)
-                            .readable(readable)
-                            .writable(writable)
-                            .executable(executable),
+                            .readable(segment_memory_protection.readable)
+                            .writable(segment_memory_protection.writable)
+                            .executable(segment_memory_protection.executable),
                     );
                 } else {
                     error!(
@@ -328,8 +337,8 @@ impl MinidumpBinaryView {
 
     fn translate_memory_protection(
         minidump_memory_protection: MemoryProtection,
-    ) -> (bool, bool, bool) {
-        match minidump_memory_protection {
+    ) -> SegmentMemoryProtection {
+        let (readable, writable, executable) = match minidump_memory_protection {
             MemoryProtection::PAGE_NOACCESS => (false, false, false),
             MemoryProtection::PAGE_READONLY => (true, false, false),
             MemoryProtection::PAGE_READWRITE => (true, true, false),
@@ -343,6 +352,11 @@ impl MinidumpBinaryView {
             MemoryProtection::PAGE_NOCACHE => (false, false, false),
             MemoryProtection::PAGE_WRITECOMBINE => (false, false, false),
             _ => (false, false, false),
+        };
+        SegmentMemoryProtection {
+            readable,
+            writable,
+            executable,
         }
     }
 }

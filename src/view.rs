@@ -171,29 +171,34 @@ impl MinidumpBinaryView {
             // Grab the shared base RVA for all entries in the MinidumpMemory64List,
             // since the minidump crate doesn't expose this to us
             if let Ok(raw_stream) = minidump_obj.get_raw_stream(MinidumpMemory64List::STREAM_TYPE) {
-                let base_rva = u64::from_le_bytes(raw_stream[8..16].try_into().unwrap());
-                debug!("Found BaseRVA value {:#x}", base_rva);
+                if let Ok(base_rva_array) = raw_stream[8..16].try_into() {
+                    let base_rva = u64::from_le_bytes(base_rva_array);
+                    debug!("Found BaseRVA value {:#x}", base_rva);
 
-                if let Ok(minidump_memory_list) = minidump_obj.get_stream::<MinidumpMemory64List>()
-                {
-                    let mut current_rva = base_rva;
-                    for memory_segment in minidump_memory_list.iter() {
-                        debug!(
+                    if let Ok(minidump_memory_list) =
+                        minidump_obj.get_stream::<MinidumpMemory64List>()
+                    {
+                        let mut current_rva = base_rva;
+                        for memory_segment in minidump_memory_list.iter() {
+                            debug!(
                             "Found 64-bit memory segment at RVA {:#x} with virtual address {:#x} and size {:#x}",
                             current_rva,
                             memory_segment.base_address,
                             memory_segment.size
                         );
-                        segment_data.push(SegmentData::from_addresses_and_size(
-                            current_rva.clone(),
-                            memory_segment.base_address,
-                            memory_segment.size,
-                        ));
-                        current_rva = current_rva + memory_segment.size;
+                            segment_data.push(SegmentData::from_addresses_and_size(
+                                current_rva.clone(),
+                                memory_segment.base_address,
+                                memory_segment.size,
+                            ));
+                            current_rva = current_rva + memory_segment.size;
+                        }
                     }
                 } else {
-                    error!("Could not read 64-bit memory list from minidump: could not find a valid MinidumpMemoryList stream");
+                    error!("Could not parse BaseRVA value shared by all entries in the MinidumpMemory64List stream")
                 }
+            } else {
+                error!("Could not read 64-bit memory list from minidump: could not find a valid MinidumpMemory64List stream");
             }
 
             // Memory protection information

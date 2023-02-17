@@ -3,7 +3,7 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 
 use binaryninja::segment::Segment;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use minidump::format::MemoryProtection;
 use minidump::{
     Minidump, MinidumpMemory64List, MinidumpMemoryInfoList, MinidumpMemoryList, MinidumpStream,
@@ -170,11 +170,12 @@ impl MinidumpBinaryView {
             // Memory segments
             let mut segment_data = Vec::<SegmentData>::new();
 
-            // 32-bit segments
+            // Memory segments in a regular memory dump (MinidumpMemoryList),
+            // i.e. one that does not include the full process memory data.
             if let Ok(minidump_memory_list) = minidump_obj.get_stream::<MinidumpMemoryList>() {
                 for memory_segment in minidump_memory_list.by_addr() {
                     debug!(
-                        "Found 32-bit memory segment at RVA {:#x} with virtual address {:#x} and size {:#x}",
+                        "Found memory segment at RVA {:#x} with virtual address {:#x} and size {:#x}",
                         memory_segment.desc.memory.rva,
                         memory_segment.base_address,
                         memory_segment.size
@@ -186,10 +187,10 @@ impl MinidumpBinaryView {
                     ));
                 }
             } else {
-                error!("Could not read 32-bit memory list from minidump: could not find a valid MinidumpMemoryList stream");
+                warn!("Could not read memory list from minidump: could not find a valid MinidumpMemoryList stream");
             }
 
-            // 64-bit segments
+            // Memory segments in a full memory dump (MinidumpMemory64List)
             // Grab the shared base RVA for all entries in the MinidumpMemory64List,
             // since the minidump crate doesn't expose this to us
             if let Ok(raw_stream) = minidump_obj.get_raw_stream(MinidumpMemory64List::STREAM_TYPE) {
@@ -203,10 +204,10 @@ impl MinidumpBinaryView {
                         let mut current_rva = base_rva;
                         for memory_segment in minidump_memory_list.iter() {
                             debug!(
-                            "Found 64-bit memory segment at RVA {:#x} with virtual address {:#x} and size {:#x}",
+                            "Found memory segment at RVA {:#x} with virtual address {:#x} and size {:#x}",
                             current_rva,
                             memory_segment.base_address,
-                            memory_segment.size
+                            memory_segment.size,
                         );
                             segment_data.push(SegmentData::from_addresses_and_size(
                                 current_rva.clone(),
@@ -220,7 +221,7 @@ impl MinidumpBinaryView {
                     error!("Could not parse BaseRVA value shared by all entries in the MinidumpMemory64List stream")
                 }
             } else {
-                error!("Could not read 64-bit memory list from minidump: could not find a valid MinidumpMemory64List stream");
+                warn!("Could not read memory list from minidump: could not find a valid MinidumpMemory64List stream");
             }
 
             // Memory protection information

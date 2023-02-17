@@ -13,10 +13,13 @@ use minidump::{
 use binaryninja::binaryview::{BinaryView, BinaryViewBase, BinaryViewExt};
 use binaryninja::custombinaryview::{
     BinaryViewType, BinaryViewTypeBase, CustomBinaryView, CustomBinaryViewType, CustomView,
+    CustomViewBuilder,
 };
 use binaryninja::databuffer::DataBuffer;
 use binaryninja::platform::Platform;
 use binaryninja::Endianness;
+
+type BinaryViewResult<R> = binaryninja::binaryview::Result<R>;
 
 #[derive(Clone)]
 pub struct DataBufferWrapper {
@@ -73,8 +76,8 @@ impl CustomBinaryViewType for MinidumpBinaryViewType {
     fn create_custom_view<'builder>(
         &self,
         data: &BinaryView,
-        builder: binaryninja::custombinaryview::CustomViewBuilder<'builder, Self>,
-    ) -> binaryninja::binaryview::Result<CustomView<'builder>> {
+        builder: CustomViewBuilder<'builder, Self>,
+    ) -> BinaryViewResult<CustomView<'builder>> {
         debug!("Creating MinidumpBinaryView from registered MinidumpBinaryViewType");
 
         let binary_view = builder.create::<MinidumpBinaryView>(data, ());
@@ -114,7 +117,7 @@ impl MinidumpBinaryView {
         }
     }
 
-    fn init(&self) -> binaryninja::binaryview::Result<()> {
+    fn init(&self) -> BinaryViewResult<()> {
         let parent_view = self.parent_view()?;
         let read_buffer = parent_view.read_buffer(0, parent_view.len())?;
         let read_buffer = DataBufferWrapper::new(read_buffer);
@@ -347,11 +350,11 @@ impl BinaryViewBase for MinidumpBinaryView {
 unsafe impl CustomBinaryView for MinidumpBinaryView {
     type Args = ();
 
-    fn new(handle: &BinaryView, _args: &Self::Args) -> binaryninja::binaryview::Result<Self> {
+    fn new(handle: &BinaryView, _args: &Self::Args) -> BinaryViewResult<Self> {
         Ok(MinidumpBinaryView::new(handle))
     }
 
-    fn init(&self, _args: Self::Args) -> binaryninja::binaryview::Result<()> {
+    fn init(&self, _args: Self::Args) -> BinaryViewResult<()> {
         self.init()
     }
 }

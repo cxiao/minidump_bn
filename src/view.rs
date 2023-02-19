@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::ops::{Deref, Range};
 use std::sync::Arc;
 
+use binaryninja::section::Section;
 use binaryninja::segment::Segment;
 use log::{debug, error, info, warn};
 use minidump::format::MemoryProtection;
 use minidump::{
-    Minidump, MinidumpMemory64List, MinidumpMemoryInfoList, MinidumpMemoryList, MinidumpStream,
-    MinidumpSystemInfo,
+    Minidump, MinidumpMemory64List, MinidumpMemoryInfoList, MinidumpMemoryList, MinidumpModuleList,
+    MinidumpStream, MinidumpSystemInfo, Module,
 };
 
 use binaryninja::binaryview::{BinaryView, BinaryViewBase, BinaryViewExt};
@@ -283,6 +284,31 @@ impl MinidumpBinaryView {
                         segment.mapped_addr_range.end,
                     );
                 }
+            }
+
+            // Module information
+            // This stretches the concept a bit, but we can add each module as a
+            // separate "section" of the binary.
+            // Sections can be named, and can span multiple segments.
+            if let Ok(minidump_module_list) = minidump_obj.get_stream::<MinidumpModuleList>() {
+                for module_info in minidump_module_list.by_addr() {
+                    info!(
+                        "Found module with name {} at virtual address {:#x} with size {:#x}",
+                        module_info.name,
+                        module_info.base_address(),
+                        module_info.size(),
+                    );
+                    let module_address_range = Range {
+                        start: module_info.base_address(),
+                        end: module_info.base_address() + module_info.size(),
+                    };
+                    self.add_section(
+                        Section::builder(module_info.name.clone(), module_address_range)
+                            .is_auto(true),
+                    );
+                }
+            } else {
+                warn!("Could not find valid module information in minidump: could not find a valid MinidumpModuleList stream");
             }
         } else {
             error!("Could not parse data as minidump");

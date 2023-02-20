@@ -394,15 +394,23 @@ impl AsRef<BinaryView> for MinidumpBinaryView {
 }
 
 impl BinaryViewBase for MinidumpBinaryView {
+    // TODO: This should be filled out with the actual address size
+    // from the platform information in the minidump.
     fn address_size(&self) -> usize {
         0
     }
 
     fn default_endianness(&self) -> Endianness {
+        // TODO: This should be filled out with the actual endianness
+        // from the platform information in the minidump.
         Endianness::LittleEndian
     }
 
     fn entry_point(&self) -> u64 {
+        // TODO: We should fill this out with a real entry point.
+        // This can be done by getting the main module of the minidump
+        // with MinidumpModuleList::main_module,
+        // then parsing the PE metadata of the main module to find its entry point(s).
         0
     }
 }

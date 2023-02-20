@@ -2,6 +2,8 @@
 
 A Minidump memory dump loader plugin for Binary Ninja.
 
+(As of [addae9e](https://github.com/cxiao/minidump_bn/tree/addae9e1d208800806e53bb19b9c3272e4f7527e), this has been merged into the official Vector35/binaryninja-api repo as a Rust API example ([PR](https://github.com/Vector35/binaryninja-api/pull/3915), [link to code](https://github.com/Vector35/binaryninja-api/tree/dev/rust/examples/minidump)))
+
 ![Screenshot of Binary Ninja using the "Minidump" Binary View, with a minidump loaded and the virtual addresses of the memory segments of the minidump showing in the Memory Map window](images/loaded-minidump-screenshot-border.png)
 
 This plugin adds a new _Minidump_ binary view type. When a binary with the magic number `MDMP` is opened, this plugin will automatically try to load in the binary as a minidump, and create a new _Minidump_ binary view to view the contents.

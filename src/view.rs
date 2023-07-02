@@ -286,7 +286,10 @@ impl MinidumpBinaryView {
                     self.add_segment(
                         Segment::builder(segment.mapped_addr_range.clone())
                             .parent_backing(segment.rva_range.clone())
-                            .is_auto(true)
+                            // In order to allow the user to actually edit the segment
+                            // and manually adjust the permissions here to the correct ones,
+                            // we need to set `is_auto` to false.
+                            .is_auto(false) 
                             .readable(true)
                             .writable(true)
                             .executable(true),

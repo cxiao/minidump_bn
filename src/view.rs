@@ -279,9 +279,17 @@ impl MinidumpBinaryView {
                             .executable(segment_memory_protection.executable),
                     );
                 } else {
-                    error!(
-                        "Could not find memory protection information for memory segment from {:#x} to {:#x}", segment.mapped_addr_range.start,
+                    warn!(
+                        "Could not find memory protection information for memory segment from {:#x} to {:#x}; segment will be added as readable, writable, and executable (RWX)", segment.mapped_addr_range.start,
                         segment.mapped_addr_range.end,
+                    );
+                    self.add_segment(
+                        Segment::builder(segment.mapped_addr_range.clone())
+                            .parent_backing(segment.rva_range.clone())
+                            .is_auto(true)
+                            .readable(true)
+                            .writable(true)
+                            .executable(true),
                     );
                 }
             }

@@ -3,7 +3,7 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 
 use binaryninja::section::Section;
-use binaryninja::segment::Segment;
+use binaryninja::segment::{Segment, SegmentFlags};
 use log::{debug, error, info, warn};
 use minidump::format::MemoryProtection;
 use minidump::{
@@ -12,16 +12,16 @@ use minidump::{
 };
 
 use binaryninja::architecture::Architecture;
-use binaryninja::binaryview::{BinaryView, BinaryViewBase, BinaryViewExt};
-use binaryninja::custombinaryview::{
+use binaryninja::binary_view::{BinaryView, BinaryViewBase, BinaryViewExt};
+use binaryninja::custom_binary_view::{
     BinaryViewType, BinaryViewTypeBase, CustomBinaryView, CustomBinaryViewType, CustomView,
     CustomViewBuilder,
 };
-use binaryninja::databuffer::DataBuffer;
+use binaryninja::data_buffer::DataBuffer;
 use binaryninja::platform::Platform;
 use binaryninja::Endianness;
 
-type BinaryViewResult<R> = binaryninja::binaryview::Result<R>;
+type BinaryViewResult<R> = binaryninja::binary_view::Result<R>;
 
 /// A wrapper around a `binaryninja::databuffer::DataBuffer`, from which a `[u8]` buffer can be obtained
 /// to pass to `minidump::Minidump::read`.
@@ -142,8 +142,8 @@ impl MinidumpBinaryView {
     }
 
     fn init(&self) -> BinaryViewResult<()> {
-        let parent_view = self.parent_view()?;
-        let read_buffer = parent_view.read_buffer(0, parent_view.len())?;
+        let parent_view = self.parent_view().ok_or(())?;
+        let read_buffer = parent_view.read_buffer(0, parent_view.len() as usize)?;
         let read_buffer = DataBufferWrapper::new(read_buffer);
 
         if let Ok(minidump_obj) = Minidump::read(read_buffer) {
@@ -271,29 +271,36 @@ impl MinidumpBinaryView {
                          segment_memory_protection.executable,
                     );
 
+                    let segment_flags = SegmentFlags::new()
+                        .readable(segment_memory_protection.readable)
+                        .writable(segment_memory_protection.writable)
+                        .executable(segment_memory_protection.executable);
+
                     self.add_segment(
                         Segment::builder(segment.mapped_addr_range.clone())
                             .parent_backing(segment.rva_range.clone())
                             .is_auto(true)
-                            .readable(segment_memory_protection.readable)
-                            .writable(segment_memory_protection.writable)
-                            .executable(segment_memory_protection.executable),
+                            .flags(segment_flags),
                     );
                 } else {
                     warn!(
                         "Could not find memory protection information for memory segment from {:#x} to {:#x}; segment will be added as readable, writable, and executable (RWX)", segment.mapped_addr_range.start,
                         segment.mapped_addr_range.end,
                     );
+
+                    let segment_flags = SegmentFlags::new()
+                        .readable(true)
+                        .writable(true)
+                        .executable(true);
+
                     self.add_segment(
                         Segment::builder(segment.mapped_addr_range.clone())
                             .parent_backing(segment.rva_range.clone())
                             // In order to allow the user to actually edit the segment
                             // and manually adjust the permissions here to the correct ones,
                             // we need to set `is_auto` to false.
-                            .is_auto(false) 
-                            .readable(true)
-                            .writable(true)
-                            .executable(true),
+                            .is_auto(false)
+                            .flags(segment_flags),
                     );
                 }
             }
@@ -440,7 +447,7 @@ unsafe impl CustomBinaryView for MinidumpBinaryView {
         Ok(MinidumpBinaryView::new(handle))
     }
 
-    fn init(&self, _args: Self::Args) -> BinaryViewResult<()> {
-        self.init()
+    fn init(&mut self, _args: Self::Args) -> BinaryViewResult<()> {
+        MinidumpBinaryView::init(self)
     }
 }

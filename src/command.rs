@@ -3,14 +3,14 @@ use std::str;
 use log::{debug, error, info};
 use minidump::{Minidump, MinidumpMemoryInfoList};
 
-use binaryninja::binaryview::{BinaryView, BinaryViewBase, BinaryViewExt};
+use binaryninja::binary_view::{BinaryView, BinaryViewBase, BinaryViewExt};
 
 use crate::view::DataBufferWrapper;
 
 pub fn print_memory_information(bv: &BinaryView) {
     debug!("Printing memory information");
-    if let Ok(minidump_bv) = bv.parent_view() {
-        if let Ok(read_buffer) = minidump_bv.read_buffer(0, minidump_bv.len()) {
+    if let Some(minidump_bv) = bv.parent_view() {
+        if let Ok(read_buffer) = minidump_bv.read_buffer(0, minidump_bv.len() as usize) {
             let read_buffer = DataBufferWrapper::new(read_buffer);
             if let Ok(minidump_obj) = Minidump::read(read_buffer) {
                 if let Ok(memory_info_list) = minidump_obj.get_stream::<MinidumpMemoryInfoList>() {

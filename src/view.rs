@@ -11,6 +11,7 @@ use minidump::{
     MinidumpStream, MinidumpSystemInfo, Module,
 };
 
+use binaryninja::architecture::Architecture;
 use binaryninja::binaryview::{BinaryView, BinaryViewBase, BinaryViewExt};
 use binaryninja::custombinaryview::{
     BinaryViewType, BinaryViewTypeBase, CustomBinaryView, CustomBinaryViewType, CustomView,
@@ -405,16 +406,22 @@ impl AsRef<BinaryView> for MinidumpBinaryView {
 }
 
 impl BinaryViewBase for MinidumpBinaryView {
-    // TODO: This should be filled out with the actual address size
-    // from the platform information in the minidump.
     fn address_size(&self) -> usize {
-        0
+        if let Some(plat) = self.default_platform() {
+            plat.arch().address_size()
+        } else {
+            error!("Could not determine platform, assuming address size of 4");
+            4
+        }
     }
 
     fn default_endianness(&self) -> Endianness {
-        // TODO: This should be filled out with the actual endianness
-        // from the platform information in the minidump.
-        Endianness::LittleEndian
+        if let Some(plat) = self.default_platform() {
+            plat.arch().endianness()
+        } else {
+            error!("Could not determine platform, assuming little endian");
+            Endianness::LittleEndian
+        }
     }
 
     fn entry_point(&self) -> u64 {

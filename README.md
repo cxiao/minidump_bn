@@ -57,9 +57,16 @@ cargo build --release
 cp target/release/libminidump_bn.so ~/.binaryninja/plugins/
 ```
 
-The code in this plugin targets the `dev` branch of the [Binary Ninja Rust API](https://github.com/Vector35/binaryninja-api/tree/dev/rust).
+The code in this plugin targets the `stable/5.1.8104` tag of the [Binary Ninja Rust API](https://github.com/Vector35/binaryninja-api/tree/stable/5.1.8104/rust).
 
-To update the Binary Ninja Rust API dependency:
+If you would like to update the Binary Ninja Rust API dependency to target a different version of Binja, edit this line in `Cargo.toml`, and specify a tag, branch, or commit to target ([Cargo documentation for how to do this](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choice-of-commit)):
+
+```
+[dependencies]
+binaryninja = {git = "https://github.com/Vector35/binaryninja-api.git", tag = "stable/5.1.8104"}
+```
+
+Then:
 
 ```
 cargo update -p binaryninja
